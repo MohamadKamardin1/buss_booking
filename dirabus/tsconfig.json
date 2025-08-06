@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "strict": true,
+    "jsx": "react-jsx",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "composite": true,
+    "noEmit": false,
+    "baseUrl": "src",
+    "paths": {
+      "@/*": ["*"],
+      "types": ["types/index.ts"]
+    }
+  },
+  "include": ["src"],
+  "references": [{"path": "./tsconfig.node.json" }]
+}
