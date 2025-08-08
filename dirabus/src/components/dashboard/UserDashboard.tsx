@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Calendar, MapPin, Clock, CreditCard, User, Settings } from 'lucide-react';
+import { Calendar, MapPin, CreditCard, User } from 'lucide-react';
 import { Booking } from '../../types';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -20,6 +20,7 @@ export const UserDashboard: React.FC = () => {
   }, [user]);
 
   const loadUserBookings = async () => {
+    setIsLoading(true);
     try {
       if (user) {
         const response = await apiService.getUserBookings(user.id);
@@ -36,21 +37,52 @@ export const UserDashboard: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'confirmed': return 'default';
-      case 'pending': return 'secondary';
-      case 'cancelled': return 'destructive';
-      case 'completed': return 'outline';
-      default: return 'secondary';
+      case 'confirmed':
+        return 'default';
+      case 'pending':
+        return 'secondary';
+      case 'cancelled':
+        return 'destructive';
+      case 'completed':
+        return 'outline';
+      default:
+        return 'secondary';
     }
   };
 
-  const upcomingBookings = bookings.filter(b => 
-    new Date(b.travelDate) >= new Date() && b.status !== 'cancelled'
+  const upcomingBookings = bookings.filter(
+    (b) => new Date(b.travelDate) >= new Date() && b.status !== 'cancelled'
   );
-  
-  const pastBookings = bookings.filter(b => 
-    new Date(b.travelDate) < new Date() || b.status === 'completed'
+
+  const pastBookings = bookings.filter(
+    (b) => new Date(b.travelDate) < new Date() || b.status === 'completed'
   );
+
+  // Placeholder handlers for buttons:
+  const handleBookFirstTrip = () => {
+    // Navigate to booking page or route selection
+    console.log('Navigate to booking page');
+  };
+
+  const handleViewDetails = (bookingId: number) => {
+    console.log('View details for booking: ', bookingId);
+    // Navigate or modal open logic here
+  };
+
+  const handleCancelBooking = (bookingId: number) => {
+    console.log('Cancel booking:', bookingId);
+    // Implement cancellation API call + UI update
+  };
+
+  const handleViewReceipt = (bookingId: number) => {
+    console.log('View receipt for booking:', bookingId);
+    // Show receipt page or modal
+  };
+
+  const handleBookAgain = (bookingId: number) => {
+    console.log('Book again based on booking:', bookingId);
+    // Possibly pre-fill booking data
+  };
 
   return (
     <div className="space-y-6">
@@ -63,7 +95,7 @@ export const UserDashboard: React.FC = () => {
             </div>
             <div>
               <h2 className="text-2xl font-bold">
-                Welcome back, {user?.firstName}!
+                Welcome back, {user?.firstName || user?.username || 'User'}!
               </h2>
               <p className="text-muted-foreground">
                 Manage your bus bookings and travel history
@@ -105,7 +137,9 @@ export const UserDashboard: React.FC = () => {
               <CreditCard className="h-8 w-8 text-purple-600" />
               <div>
                 <div className="text-2xl font-bold">
-                  {bookings.reduce((sum, b) => sum + b.totalPrice, 0).toLocaleString()}
+                  {bookings
+                    .reduce((sum, b) => sum + (b.totalPrice || 0), 0)
+                    .toLocaleString()}
                 </div>
                 <div className="text-sm text-muted-foreground">Total Spent (TSh)</div>
               </div>
@@ -125,9 +159,7 @@ export const UserDashboard: React.FC = () => {
               <TabsTrigger value="upcoming">
                 Upcoming ({upcomingBookings.length})
               </TabsTrigger>
-              <TabsTrigger value="past">
-                Past ({pastBookings.length})
-              </TabsTrigger>
+              <TabsTrigger value="past">Past ({pastBookings.length})</TabsTrigger>
             </TabsList>
 
             <TabsContent value="upcoming" className="mt-6">
@@ -136,21 +168,25 @@ export const UserDashboard: React.FC = () => {
               ) : upcomingBookings.length === 0 ? (
                 <div className="text-center py-8">
                   <p className="text-muted-foreground mb-4">No upcoming bookings</p>
-                  <Button>Book Your First Trip</Button>
+                  <Button onClick={handleBookFirstTrip}>Book Your First Trip</Button>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {upcomingBookings.map((booking) => (
-                    <Card key={booking.id} className="hover:shadow-md transition-shadow">
+                    <Card
+                      key={booking.id}
+                      className="hover:shadow-md transition-shadow"
+                    >
                       <CardContent className="pt-6">
                         <div className="flex justify-between items-start mb-4">
                           <div>
                             <div className="font-medium mb-1">
-                              {/* You would need to resolve station names from IDs */}
                               Booking #{booking.receiptId}
+                              {/* TODO: Resolve station names if available */}
                             </div>
                             <div className="text-sm text-muted-foreground">
-                              Travel Date: {new Date(booking.travelDate).toLocaleDateString()}
+                              Travel Date:{' '}
+                              {new Date(booking.travelDate).toLocaleDateString()}
                             </div>
                           </div>
                           <Badge variant={getStatusColor(booking.status)}>
@@ -165,11 +201,15 @@ export const UserDashboard: React.FC = () => {
                           </div>
                           <div>
                             <span className="text-muted-foreground">Passengers:</span>
-                            <div className="font-medium">{booking.passengerInfo.length}</div>
+                            <div className="font-medium">
+                              {booking.passengerInfo.length}
+                            </div>
                           </div>
                           <div>
                             <span className="text-muted-foreground">Amount:</span>
-                            <div className="font-medium">TSh {booking.totalPrice.toLocaleString()}</div>
+                            <div className="font-medium">
+                              TSh {booking.totalPrice.toLocaleString()}
+                            </div>
                           </div>
                           <div>
                             <span className="text-muted-foreground">Booked:</span>
@@ -180,11 +220,19 @@ export const UserDashboard: React.FC = () => {
                         </div>
 
                         <div className="flex gap-2 mt-4">
-                          <Button size="sm" variant="outline">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleViewDetails(booking.id)}
+                          >
                             View Details
                           </Button>
                           {booking.status === 'confirmed' && (
-                            <Button size="sm" variant="outline">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleCancelBooking(booking.id)}
+                            >
                               Cancel Booking
                             </Button>
                           )}
@@ -212,7 +260,8 @@ export const UserDashboard: React.FC = () => {
                               Booking #{booking.receiptId}
                             </div>
                             <div className="text-sm text-muted-foreground">
-                              Travel Date: {new Date(booking.travelDate).toLocaleDateString()}
+                              Travel Date:{' '}
+                              {new Date(booking.travelDate).toLocaleDateString()}
                             </div>
                           </div>
                           <Badge variant={getStatusColor(booking.status)}>
@@ -227,11 +276,15 @@ export const UserDashboard: React.FC = () => {
                           </div>
                           <div>
                             <span className="text-muted-foreground">Passengers:</span>
-                            <div className="font-medium">{booking.passengerInfo.length}</div>
+                            <div className="font-medium">
+                              {booking.passengerInfo.length}
+                            </div>
                           </div>
                           <div>
                             <span className="text-muted-foreground">Amount:</span>
-                            <div className="font-medium">TSh {booking.totalPrice.toLocaleString()}</div>
+                            <div className="font-medium">
+                              TSh {booking.totalPrice.toLocaleString()}
+                            </div>
                           </div>
                           <div>
                             <span className="text-muted-foreground">Booked:</span>
@@ -242,10 +295,18 @@ export const UserDashboard: React.FC = () => {
                         </div>
 
                         <div className="flex gap-2 mt-4">
-                          <Button size="sm" variant="outline">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleViewReceipt(booking.id)}
+                          >
                             View Receipt
                           </Button>
-                          <Button size="sm" variant="outline">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleBookAgain(booking.id)}
+                          >
                             Book Again
                           </Button>
                         </div>

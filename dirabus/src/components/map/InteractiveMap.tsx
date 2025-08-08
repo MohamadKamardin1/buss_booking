@@ -1,16 +1,46 @@
 import React, { useState, useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { MapPin, Navigation } from 'lucide-react';
-import { Route, Station } from '../../types';
-import { apiService } from '../../services/api';
+import { Navigation } from 'lucide-react';
+
+interface Route {
+  id: number;
+  name: string;
+  start_location: string;
+  end_location: string;
+  distance: number;
+  estimated_duration: number;
+}
+
+interface Station {
+  id: number;
+  name: string;
+  latitude: number;
+  longitude: number;
+  order: number;
+  route: number;
+}
 
 interface InteractiveMapProps {
   onRouteSelect: (route: Route) => void;
   onStationSelect: (fromStation: Station, toStation: Station) => void;
   selectedRoute?: Route;
 }
+
+const DEFAULT_CENTER: [number, number] = [-6.1659, 39.2026]; // Zanzibar
+
+// Fix default marker icon issues in Leaflet with webpack
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl:
+    'https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.3/dist/images/marker-shadow.png',
+});
 
 export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   onRouteSelect,
@@ -21,7 +51,42 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const [stations, setStations] = useState<Station[]>([]);
   const [selectedFromStation, setSelectedFromStation] = useState<Station | null>(null);
   const [selectedToStation, setSelectedToStation] = useState<Station | null>(null);
-  const [mapCenter, setMapCenter] = useState({ lat: -6.1659, lng: 39.2026 }); // Zanzibar coordinates
+  const [loadingRoutes, setLoadingRoutes] = useState(false);
+  const [loadingStations, setLoadingStations] = useState(false);
+
+  const API_BASE_URL = 'http://127.0.0.1:8000/api';
+
+  // Load all routes
+  const loadRoutes = async () => {
+    setLoadingRoutes(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/routes/`);
+      if (!res.ok) throw new Error('Failed to load routes');
+      const data: Route[] = await res.json();
+      setRoutes(data);
+    } catch (err) {
+      console.error(err);
+      setRoutes([]);
+    } finally {
+      setLoadingRoutes(false);
+    }
+  };
+
+  // Load stations for selected route
+  const loadStations = async (routeId: number) => {
+    setLoadingStations(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/routes/${routeId}/stations/`);
+      if (!res.ok) throw new Error('Failed to load stations');
+      const data: Station[] = await res.json();
+      setStations(data);
+    } catch (err) {
+      console.error(err);
+      setStations([]);
+    } finally {
+      setLoadingStations(false);
+    }
+  };
 
   useEffect(() => {
     loadRoutes();
@@ -30,30 +95,14 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   useEffect(() => {
     if (selectedRoute) {
       loadStations(selectedRoute.id);
+      setSelectedFromStation(null);
+      setSelectedToStation(null);
+    } else {
+      setStations([]);
+      setSelectedFromStation(null);
+      setSelectedToStation(null);
     }
   }, [selectedRoute]);
-
-  const loadRoutes = async () => {
-    try {
-      const response = await apiService.getRoutes();
-      if (response.success) {
-        setRoutes(response.data);
-      }
-    } catch (error) {
-      console.error('Failed to load routes:', error);
-    }
-  };
-
-  const loadStations = async (routeId: string) => {
-    try {
-      const response = await apiService.getStationsByRoute(routeId);
-      if (response.success) {
-        setStations(response.data);
-      }
-    } catch (error) {
-      console.error('Failed to load stations:', error);
-    }
-  };
 
   const handleStationClick = (station: Station) => {
     if (!selectedFromStation) {
@@ -62,7 +111,6 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       setSelectedToStation(station);
       onStationSelect(selectedFromStation, station);
     } else {
-      // Reset selection
       setSelectedFromStation(station);
       setSelectedToStation(null);
     }
@@ -83,66 +131,68 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {/* Map Container - This would integrate with actual map service */}
-          <div className="relative bg-gray-100 rounded-lg h-96 mb-4 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-200 to-green-200 flex items-center justify-center">
-              <div className="text-center">
-                <MapPin className="h-12 w-12 mx-auto mb-2 text-gray-600" />
-                <p className="text-gray-600">Interactive Map</p>
-                <p className="text-sm text-gray-500">
-                  {/* API Integration Point: Use Google Maps, Mapbox, or OpenStreetMap */}
-                  Integrate with mapping service
-                </p>
-              </div>
-            </div>
-            
-            {/* Simulated map content for demonstration */}
-            <div className="absolute inset-4 space-y-2">
-              {stations.map((station, index) => (
-                <Button
+          <div className="mb-4 h-[400px] rounded-lg overflow-hidden border border-gray-300">
+            <MapContainer
+              center={
+                selectedFromStation
+                  ? [selectedFromStation.latitude, selectedFromStation.longitude]
+                  : DEFAULT_CENTER
+              }
+              zoom={12}
+              scrollWheelZoom={true}
+              style={{ height: '100%', width: '100%' }}
+            >
+              {/* OpenStreetMap tiles */}
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+
+              {/* Station Markers */}
+              {stations.map((station) => (
+                <Marker
                   key={station.id}
-                  variant={
-                    selectedFromStation?.id === station.id
-                      ? 'default'
-                      : selectedToStation?.id === station.id
-                      ? 'secondary'
-                      : 'outline'
-                  }
-                  size="sm"
-                  className="absolute"
-                  style={{
-                    left: `${20 + index * 15}%`,
-                    top: `${30 + index * 10}%`,
+                  position={[station.latitude, station.longitude]}
+                  eventHandlers={{
+                    click: () => handleStationClick(station),
                   }}
-                  onClick={() => handleStationClick(station)}
                 >
-                  <MapPin className="h-3 w-3 mr-1" />
-                  {station.name}
-                </Button>
+                  <Popup>
+                    <div>
+                      <strong>{station.name}</strong>
+                      <br />
+                      {`Order: ${station.order}`}
+                    </div>
+                  </Popup>
+                </Marker>
               ))}
-            </div>
+            </MapContainer>
           </div>
 
           {/* Route Selection */}
           <div className="space-y-3">
             <h4>Available Routes</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {routes.map((route) => (
-                <Button
-                  key={route.id}
-                  variant={selectedRoute?.id === route.id ? 'default' : 'outline'}
-                  onClick={() => onRouteSelect(route)}
-                  className="justify-start p-3 h-auto"
-                >
-                  <div className="text-left">
-                    <div className="font-medium">{route.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {route.startLocation} → {route.endLocation}
+            {loadingRoutes ? (
+              <p>Loading routes...</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {routes.map((route) => (
+                  <Button
+                    key={route.id}
+                    variant={selectedRoute?.id === route.id ? 'default' : 'outline'}
+                    onClick={() => onRouteSelect(route)}
+                    className="justify-start p-3 h-auto"
+                  >
+                    <div className="text-left">
+                      <div className="font-medium">{route.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {route.start_location} → {route.end_location}
+                      </div>
                     </div>
-                  </div>
-                </Button>
-              ))}
-            </div>
+                  </Button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Station Selection Status */}
@@ -151,22 +201,17 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
               <h4>Station Selection</h4>
               <div className="flex flex-wrap gap-2">
                 {selectedFromStation && (
-                  <Badge variant="default">
-                    From: {selectedFromStation.name}
-                  </Badge>
+                  <Badge variant="default">From: {selectedFromStation.name}</Badge>
                 )}
                 {selectedToStation && (
-                  <Badge variant="secondary">
-                    To: {selectedToStation.name}
-                  </Badge>
+                  <Badge variant="secondary">To: {selectedToStation.name}</Badge>
                 )}
               </div>
               {selectedFromStation && (
                 <p className="text-sm text-muted-foreground">
-                  {selectedToStation 
+                  {selectedToStation
                     ? 'Route selected! You can now search for buses.'
-                    : 'Now select your destination station.'
-                  }
+                    : 'Now select your destination station.'}
                 </p>
               )}
               <Button variant="outline" size="sm" onClick={resetSelection}>

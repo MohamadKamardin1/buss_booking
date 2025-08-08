@@ -3,7 +3,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Separator } from '../ui/separator';
-import { CheckCircle, Download, Share2, Calendar, MapPin, Users } from 'lucide-react';
+import {
+  CheckCircle,
+  Download,
+  Share2,
+  Calendar,
+  MapPin,
+  Users,
+} from 'lucide-react';
 import { Booking, Bus, Station } from '../../types';
 
 interface BookingReceiptProps {
@@ -21,19 +28,41 @@ export const BookingReceipt: React.FC<BookingReceiptProps> = ({
   toStation,
   onNewBooking,
 }) => {
-  const handleDownloadReceipt = () => {
-    // API Integration Point: Generate PDF receipt
-    console.log('Download receipt:', booking.receiptId);
+  const handleDownloadReceipt = async () => {
+    // Example download implementation
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/bookings/${booking.receiptId}/receipt/`); 
+      if (!response.ok) throw new Error('Failed to download receipt');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Receipt_${booking.receiptId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error(error);
+      alert('Unable to download receipt');
+    }
   };
 
   const handleShareReceipt = () => {
-    // Share booking details
     if (navigator.share) {
-      navigator.share({
-        title: 'Bus Booking Receipt',
-        text: `Booking confirmed! Trip from ${fromStation.name} to ${toStation.name}`,
-        url: window.location.href,
-      });
+      navigator
+        .share({
+          title: 'Bus Booking Receipt',
+          text: `Booking confirmed! Trip from ${fromStation.name} to ${toStation.name}`,
+          url: window.location.href,
+        })
+        .catch(console.error);
+    } else {
+      // Fallback: copy URL to clipboard
+      navigator.clipboard
+        .writeText(window.location.href)
+        .then(() => alert('Booking URL copied to clipboard!'))
+        .catch(() => alert('Unable to access clipboard'));
     }
   };
 
@@ -70,20 +99,22 @@ export const BookingReceipt: React.FC<BookingReceiptProps> = ({
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <span className="text-muted-foreground">From:</span>
-                <div className="font-medium">{fromStation.name}</div>
+                <div className="font-medium">{fromStation?.name || 'N/A'}</div>
               </div>
               <div>
                 <span className="text-muted-foreground">To:</span>
-                <div className="font-medium">{toStation.name}</div>
+                <div className="font-medium">{toStation?.name || 'N/A'}</div>
               </div>
               <div>
                 <span className="text-muted-foreground">Bus:</span>
-                <div className="font-medium">{bus.plateNumber}</div>
+                <div className="font-medium">{bus?.plateNumber || 'N/A'}</div>
               </div>
               <div>
                 <span className="text-muted-foreground">Travel Date:</span>
                 <div className="font-medium">
-                  {new Date(booking.travelDate).toLocaleDateString()}
+                  {booking.travelDate
+                    ? new Date(booking.travelDate).toLocaleDateString()
+                    : 'N/A'}
                 </div>
               </div>
             </div>
@@ -98,26 +129,30 @@ export const BookingReceipt: React.FC<BookingReceiptProps> = ({
               Passenger Details
             </h3>
             <div className="space-y-3">
-              {booking.passengerInfo.map((passenger, index) => (
-                <div key={index} className="p-3 bg-gray-50 rounded-lg">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="font-medium">{passenger.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {passenger.phone} • {passenger.email}
+              {booking.passengerInfo && booking.passengerInfo.length > 0 ? (
+                booking.passengerInfo.map((passenger, index) => (
+                  <div key={index} className="p-3 bg-gray-50 rounded-lg">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="font-medium">{passenger.name || 'N/A'}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {passenger.phone || '-'} • {passenger.email || '-'}
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-right">
-                      <Badge variant="outline">
-                        Seat {booking.seats[index]}
-                      </Badge>
-                      <div className="text-sm mt-1">
-                        {passenger.passengerType}
+                      <div className="text-right">
+                        <Badge variant="outline">
+                          Seat {passenger.seatNumber || passenger.seatId || 'N/A'}
+                        </Badge>
+                        <div className="text-sm mt-1">
+                          {passenger.passengerType || 'N/A'}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              ) : (
+                <p>No passenger information available.</p>
+              )}
             </div>
           </div>
 
@@ -128,17 +163,23 @@ export const BookingReceipt: React.FC<BookingReceiptProps> = ({
             <h3 className="font-medium">Payment Summary</h3>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span>Seats ({booking.seats.length}):</span>
-                <span>{booking.seats.join(', ')}</span>
+                <span>Seats ({booking.seats?.length ?? 0}):</span>
+                <span>{booking.seats?.length ? booking.seats.join(', ') : 'N/A'}</span>
               </div>
               <div className="flex justify-between">
                 <span>Total Amount:</span>
-                <span className="font-medium">TSh {booking.totalPrice.toLocaleString()}</span>
+                <span className="font-medium">
+                  {typeof booking.totalPrice === 'number'
+                    ? `TSh ${booking.totalPrice.toLocaleString()}`
+                    : 'N/A'}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span>Status:</span>
-                <Badge variant={booking.status === 'confirmed' ? 'default' : 'secondary'}>
-                  {booking.status}
+                <Badge
+                  variant={booking.status === 'confirmed' ? 'default' : 'secondary'}
+                >
+                  {booking.status || 'N/A'}
                 </Badge>
               </div>
             </div>
@@ -159,15 +200,25 @@ export const BookingReceipt: React.FC<BookingReceiptProps> = ({
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-3 pt-4">
-            <Button onClick={handleDownloadReceipt} variant="outline" className="flex-1">
+            <Button
+              onClick={handleDownloadReceipt}
+              variant="outline"
+              className="flex-1"
+              aria-label="Download Booking Receipt"
+            >
               <Download className="h-4 w-4 mr-2" />
               Download Receipt
             </Button>
-            <Button onClick={handleShareReceipt} variant="outline" className="flex-1">
+            <Button
+              onClick={handleShareReceipt}
+              variant="outline"
+              className="flex-1"
+              aria-label="Share Booking Receipt"
+            >
               <Share2 className="h-4 w-4 mr-2" />
               Share
             </Button>
-            <Button onClick={onNewBooking} className="flex-1">
+            <Button onClick={onNewBooking} className="flex-1" aria-label="Book Another Trip">
               <Calendar className="h-4 w-4 mr-2" />
               Book Another Trip
             </Button>

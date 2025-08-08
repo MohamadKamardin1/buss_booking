@@ -1,33 +1,67 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom'; // Import useNavigate
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'sonner';
+
 interface LoginFormProps {
   onToggleMode: () => void;
 }
 
 export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
+
+  const navigate = useNavigate();  // Initialize navigate hook
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      const success = await login(email, password);
-      if (success) {
-        toast.success('Login successful!');
+      const response = await fetch('http://127.0.0.1:8000/api/login/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+
+        if (data.access && data.role && data.username) {
+          localStorage.setItem('token', data.access);
+          localStorage.setItem('refreshToken', data.refresh);
+          localStorage.setItem('username', data.username);
+          localStorage.setItem('userRole', data.role);
+
+          toast.success('Login successful!');
+
+          // Redirect user based on role
+          switch (data.role) {
+            case 'conductor':
+              navigate('/conductor');
+              break;
+            case 'passenger':
+              navigate('/passenger');
+              break;
+            case 'admin':
+              navigate('/admin');
+              break;
+            default:
+              navigate('/'); // fallback or home page
+          }
+        } else {
+          toast.error('Login failed: Invalid response from server.');
+        }
       } else {
-        toast.error('Invalid credentials. Please try again.');
+        const errorData = await response.json().catch(() => ({}));
+        toast.error(errorData.detail || 'Invalid credentials. Please try again.');
       }
     } catch (error) {
-      toast.error('Login failed. Please try again.');
+      toast.error('Login failed: Network error or server not reachable.');
     } finally {
       setIsLoading(false);
     }
@@ -42,13 +76,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="username">Username</Label>
             <Input
-              id="email"
-              type="email"
-              placeholder="Enter your email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              id="username"
+              type="text"
+              placeholder="Enter your username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               required
             />
           </div>

@@ -73,7 +73,7 @@ export const Navigation: React.FC<NavigationProps> = ({ currentView, onViewChang
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-2">
             <Bus className="h-6 w-6 text-primary" />
-            <h1 className="text-xl font-bold">ZanziBus</h1>
+            <h1 className="text-xl font-bold">DiraBus</h1>
           </div>
           <p className="text-sm text-muted-foreground">Bus Booking System</p>
         </div>
