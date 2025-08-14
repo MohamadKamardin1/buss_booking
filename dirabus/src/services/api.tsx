@@ -1,62 +1,6 @@
 import { Route, Station, Bus, Seat, Booking, ApiResponse } from '../types';
 
-const API_BASE_URL = 'http://127.0.0.0:8000/api';
-
-// Mock data for fallback when backend is unreachable
-const mockRoutes: Route[] = [
-  {
-    id: 'route-1',
-    name: 'Bububu - Fuoni Express',
-    startLocation: 'Bububu',
-    endLocation: 'Fuoni',
-    distance: 15.5,
-    estimatedDuration: 45,
-    stations: []
-  },
-  {
-    id: 'route-2',
-    name: 'Stone Town - Jambiani',
-    startLocation: 'Stone Town',
-    endLocation: 'Jambiani',
-    distance: 32.0,
-    estimatedDuration: 75,
-    stations: []
-  },
-];
-
-const mockStations: Station[] = [
-  { id: 'station-1', name: 'Bububu Terminal', routeId: 'route-1', latitude: -6.1659, longitude: 39.2026, order: 1 },
-  { id: 'station-2', name: 'Mahonda', routeId: 'route-1', latitude: -6.1559, longitude: 39.2126, order: 2 },
-  { id: 'station-3', name: 'Chukwani', routeId: 'route-1', latitude: -6.1459, longitude: 39.2226, order: 3 },
-  { id: 'station-4', name: 'Fuoni Market', routeId: 'route-1', latitude: -6.1359, longitude: 39.2326, order: 4 },
-];
-
-const mockBuses: Bus[] = [
-  {
-    id: 'bus-1',
-    plateNumber: 'T123ABC',
-    routeId: 'route-1',
-    capacity: 50,
-    availableSeats: 25,
-    pricePerSeat: 5000,
-    studentDiscount: 20,
-    departureTime: '08:00',
-    arrivalTime: '08:45',
-    status: 'active',
-  },
-  {
-    id: 'bus-2',
-    plateNumber: 'T456DEF',
-    routeId: 'route-1',
-    capacity: 45,
-    availableSeats: 12,
-    pricePerSeat: 4500,
-    studentDiscount: 15,
-    departureTime: '10:30',
-    arrivalTime: '11:15',
-    status: 'active',
-  },
-];
+const API_BASE_URL = 'http://127.0.0.1:8000/api';
 
 class ApiService {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
@@ -75,7 +19,6 @@ class ApiService {
       const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
 
       if (!response.ok) {
-        // Attempt to parse error detail from response
         let errorMessage = `HTTP ${response.status}`;
         try {
           const errorData = await response.json();
@@ -88,110 +31,14 @@ class ApiService {
 
       const data = await response.json();
       return { success: true, data, message: 'OK' };
-    } catch (error) {
-      console.warn(`API request to ${endpoint} failed, using mock data:`, error);
-      // Fallback: return mock data if available
-      return this.getMockResponse<T>(endpoint, options.method || 'GET');
+    } catch (error: any) {
+      // Forward the error without fallback
+      return { success: false, data: null as any, message: error.message || 'API request failed' };
     }
-  }
-
-  private getMockResponse<T>(endpoint: string, method: string): ApiResponse<T> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve(this.generateMockData<T>(endpoint, method));
-      }, 500);
-    }) as any;
-  }
-
-  private generateMockData<T>(endpoint: string, method: string): ApiResponse<T> {
-    console.log(`Generating mock data for ${method} ${endpoint}`);
-
-    if (endpoint === '/routes') {
-      return { success: true, data: mockRoutes as T, message: 'Mock routes loaded' };
-    }
-
-    if (endpoint.includes('/routes/') && endpoint.includes('/stations')) {
-      const routeId = endpoint.split('/')[2];
-      const stations = mockStations.filter(s => s.routeId === routeId);
-      return { success: true, data: stations as T, message: 'Mock stations loaded' };
-    }
-
-    if (endpoint.includes('/buses/route/')) {
-      const routeId = endpoint.split('/')[3].split('?')[0];
-      const buses = mockBuses.filter(b => b.routeId === routeId);
-      return { success: true, data: buses as T, message: 'Mock buses loaded' };
-    }
-
-    if (endpoint.includes('/buses/') && endpoint.includes('/seats')) {
-      const busId = endpoint.split('/')[2];
-      const seats: Seat[] = [];
-      for (let i = 1; i <= 50; i++) {
-        seats.push({
-          id: `seat-${i}`,
-          busId,
-          seatNumber: i.toString(),
-          isAvailable: Math.random() > 0.3,
-          isReserved: false,
-        });
-      }
-      return { success: true, data: seats as T, message: 'Mock seats loaded' };
-    }
-
-    if (endpoint === '/bookings' && method === 'POST') {
-      const mockBooking: Booking = {
-        id: 'booking-' + Date.now(),
-        userId: 'user-1',
-        busId: 'bus-1',
-        fromStationId: 'station-1',
-        toStationId: 'station-4',
-        seats: ['1', '2'],
-        totalPrice: 10000,
-        passengerInfo: [
-          { name: 'John Doe', phone: '+255123456789', email: 'john@example.com', passengerType: 'adult' }
-        ],
-        status: 'confirmed',
-        bookingDate: new Date().toISOString(),
-        travelDate: new Date().toISOString(),
-        receiptId: 'RCP-' + Date.now(),
-      };
-      return { success: true, data: mockBooking as T, message: 'Mock booking created' };
-    }
-
-    if (endpoint.includes('/users/') && endpoint.includes('/bookings')) {
-      return { success: true, data: [] as T, message: 'No bookings found' };
-    }
-
-    if (endpoint === '/admin/stats') {
-      const mockStats = {
-        stats: {
-          totalUsers: 1250,
-          totalBookings: 3420,
-          totalRevenue: 12500000,
-          activeBuses: 45,
-          activeRoutes: 12,
-        },
-        chartData: [
-          { month: 'Jan', bookings: 245, revenue: 980000 },
-          { month: 'Feb', bookings: 312, revenue: 1250000 },
-          { month: 'Mar', bookings: 389, revenue: 1560000 },
-          { month: 'Apr', bookings: 298, revenue: 1190000 },
-          { month: 'May', bookings: 445, revenue: 1780000 },
-          { month: 'Jun', bookings: 567, revenue: 2270000 },
-        ]
-      };
-      return { success: true, data: mockStats as T, message: 'Mock stats loaded' };
-    }
-
-    // Default empty response
-    return { success: true, data: [] as T, message: 'Mock data not available for this endpoint' };
   }
 
   // ================== AUTHENTICATION ====================
 
-  /**
-   * Logs in the user by calling Django backend /login/ endpoint.
-   * On success, stores access and refresh tokens in localStorage.
-   */
   async login(username: string, password: string): Promise<ApiResponse<{ access: string; refresh: string; role: string; username: string }>> {
     try {
       const response = await fetch(`${API_BASE_URL}/login/`, {
@@ -201,7 +48,7 @@ class ApiService {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         return { success: false, data: null, message: errorData.detail || 'Login failed' };
       }
 
@@ -214,14 +61,11 @@ class ApiService {
       localStorage.setItem('userRole', data.role);
 
       return { success: true, data, message: 'Login successful' };
-    } catch (error) {
-      return { success: false, data: null, message: 'Network error during login' };
+    } catch (error: any) {
+      return { success: false, data: null, message: error.message || 'Network error during login' };
     }
   }
 
-  /**
-   * Registers new users: conductor or passenger only.
-   */
   async register(username: string, password: string, role: 'conductor' | 'passenger'): Promise<ApiResponse<any>> {
     try {
       const response = await fetch(`${API_BASE_URL}/register/`, {
@@ -231,20 +75,17 @@ class ApiService {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         return { success: false, data: null, message: errorData.message || 'Registration failed' };
       }
 
       const data = await response.json();
       return { success: true, data, message: 'Registration successful' };
-    } catch (error) {
-      return { success: false, data: null, message: 'Network error during registration' };
+    } catch (error: any) {
+      return { success: false, data: null, message: error.message || 'Network error during registration' };
     }
   }
 
-  /**
-   * Clears all localStorage tokens and user info.
-   */
   logout(): void {
     localStorage.removeItem('token');
     localStorage.removeItem('refreshToken');
@@ -252,7 +93,6 @@ class ApiService {
     localStorage.removeItem('userRole');
   }
 
-  /** Helper to get current user info from localStorage */
   getCurrentUser() {
     const username = localStorage.getItem('username');
     const role = localStorage.getItem('userRole');
@@ -261,7 +101,6 @@ class ApiService {
 
   // ================= REST OF YOUR API METHODS =================
 
-  // Route Management APIs
   async getRoutes(): Promise<ApiResponse<Route[]>> {
     return this.request<Route[]>('/routes');
   }
@@ -274,7 +113,6 @@ class ApiService {
     return this.request<Station[]>(`/routes/${routeId}/stations`);
   }
 
-  // Bus Management APIs
   async getBusesByRoute(routeId: string, date: string): Promise<ApiResponse<Bus[]>> {
     return this.request<Bus[]>(`/buses/route/${routeId}?date=${date}`);
   }
@@ -290,7 +128,6 @@ class ApiService {
     });
   }
 
-  // Seat Management APIs
   async getBusSeats(busId: string): Promise<ApiResponse<Seat[]>> {
     return this.request<Seat[]>(`/buses/${busId}/seats`);
   }
@@ -302,7 +139,6 @@ class ApiService {
     });
   }
 
-  // Booking APIs
   async createBooking(bookingData: Partial<Booking>): Promise<ApiResponse<Booking>> {
     return this.request<Booking>('/bookings', {
       method: 'POST',
@@ -324,7 +160,6 @@ class ApiService {
     });
   }
 
-  // Conductor APIs
   async getAllBookings(): Promise<ApiResponse<Booking[]>> {
     return this.request<Booking[]>('/conductor/bookings');
   }
@@ -336,7 +171,6 @@ class ApiService {
     });
   }
 
-  // Admin APIs
   async createRoute(routeData: Partial<Route>): Promise<ApiResponse<Route>> {
     return this.request<Route>('/admin/routes', {
       method: 'POST',

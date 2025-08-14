@@ -1,98 +1,165 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { User } from 'types';
-import { apiService } from '../services/api'; // Adjust path to your apiService
+import { apiService } from '../services/api';
 
 interface AuthContextType {
   user: User | null;
-  login: (username: string, password: string) => Promise<boolean>;
-  register: (username: string, password: string, role: 'conductor' | 'passenger') => Promise<boolean>;
-  logout: () => void;
+  token: string | null;
   isLoading: boolean;
+  error: string | null;
+  login: (username: string, password: string) => Promise<{ success: boolean; message?: string }>;
+  register: (username: string, password: string, role: 'conductor' | 'passenger') => Promise<{ success: boolean; message?: string }>;
+  logout: () => void;
+  refreshAccessToken: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
+  // Load user and tokens from localStorage on mount
   useEffect(() => {
-    // On mount, check localStorage for user info saved by apiService.login()
+    const storedToken = localStorage.getItem('token');
+    const storedRefreshToken = localStorage.getItem('refreshToken');
     const storedUsername = localStorage.getItem('username');
     const storedUserRole = localStorage.getItem('userRole');
+    const storedUserId = localStorage.getItem('userId'); // Store user id if you add it
 
-    if (storedUsername && storedUserRole) {
-      // Construct minimal User object to keep context consistent with your User type
+    if (storedToken && storedRefreshToken && storedUsername && storedUserRole) {
+      setToken(storedToken);
+      setRefreshToken(storedRefreshToken);
       setUser({
+        id: storedUserId ? Number(storedUserId) : undefined,
         username: storedUsername,
         role: storedUserRole,
-        // add other User fields here if you have them stored or fetch user profile from API later
       } as User);
     }
     setIsLoading(false);
   }, []);
 
-  const login = async (username: string, password: string): Promise<boolean> => {
+  // Provide a function to refresh access token using refresh token
+  const refreshAccessToken = useCallback(async (): Promise<boolean> => {
+    if (!refreshToken) {
+      logout();
+      return false;
+    }
+
+    try {
+      const response = await apiService.refreshToken(refreshToken);
+      if (response.success && response.data) {
+        localStorage.setItem('token', response.data.access);
+        setToken(response.data.access);
+        return true;
+      } else {
+        logout();
+        return false;
+      }
+    } catch (err) {
+      console.error('Failed to refresh token', err);
+      logout();
+      return false;
+    }
+  }, [refreshToken]);
+
+  // Adjust login method to return detailed status and store userId if available
+  const login = useCallback(async (username: string, password: string): Promise<{ success: boolean; message?: string }> => {
     setIsLoading(true);
+    setError(null);
     try {
       const response = await apiService.login(username, password);
       if (response.success && response.data) {
-        // Set user with returned info
+        const { access, refresh, role, username: returnedUsername, user_id } = response.data as any; // Replace with your response shape if different
+
+        // Store tokens and user info, including user id if available
+        localStorage.setItem('token', access);
+        localStorage.setItem('refreshToken', refresh);
+        localStorage.setItem('username', returnedUsername);
+        localStorage.setItem('userRole', role);
+        if (user_id) localStorage.setItem('userId', String(user_id));
+
         setUser({
-          username: response.data.username,
-          role: response.data.role,
-          // add other User fields if available
+          id: user_id ? Number(user_id) : undefined,
+          username: returnedUsername,
+          role,
         } as User);
-        return true;
+        setToken(access);
+        setRefreshToken(refresh);
+
+        return { success: true };
+      } else {
+        const message = response.message || 'Login failed';
+        setError(message);
+        return { success: false, message };
       }
-      return false;
-    } catch (error) {
-      console.error('Login error:', error);
-      return false;
+    } catch (err: any) {
+      const message = err?.message || 'Network error';
+      setError(message);
+      return { success: false, message };
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const register = async (
-    username: string,
-    password: string,
-    role: 'conductor' | 'passenger'
-  ): Promise<boolean> => {
+  const register = useCallback(async (username: string, password: string, role: 'conductor' | 'passenger'): Promise<{ success: boolean; message?: string }> => {
     setIsLoading(true);
+    setError(null);
     try {
       const response = await apiService.register(username, password, role);
       if (response.success) {
-        // Optionally auto-login the user after registration,
-        // or require user to login manually
-        // Here, just return true on success
-        return true;
+        return { success: true };
+      } else {
+        const message = response.message || 'Registration failed';
+        setError(message);
+        return { success: false, message };
       }
-      return false;
-    } catch (error) {
-      console.error('Registration error:', error);
-      return false;
+    } catch (err: any) {
+      const message = err?.message || 'Network error';
+      setError(message);
+      return { success: false, message };
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const logout = () => {
-    apiService.logout();
+  const logout = useCallback(() => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('username');
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('userId');
     setUser(null);
-  };
+    setToken(null);
+    setRefreshToken(null);
+    setError(null);
+  }, []);
 
-  return (
-    <AuthContext.Provider value={{ user, login, register, logout, isLoading }}>
-      {children}
-    </AuthContext.Provider>
+  // Memoize context value to avoid unnecessary renders
+  const contextValue = useMemo(
+    () => ({
+      user,
+      token,
+      isLoading,
+      error,
+      login,
+      register,
+      logout,
+      refreshAccessToken,
+    }),
+    [user, token, isLoading, error, login, register, logout, refreshAccessToken]
   );
+
+  // Optionally, add a timer here or an effect to refresh token before expiry if desired, e.g. with setTimeout.
+
+  return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
 };

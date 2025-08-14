@@ -3,12 +3,30 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
 
+interface RawBus {
+  id: number;
+  plate_number: string;
+  available_seats: number;
+  price_per_seat: string | number;   // backend may send string number
+  student_discount: string | number;
+}
+
 interface Bus {
   id: number;
   plateNumber: string;
   availableSeats: number;
   pricePerSeat: number;
   studentDiscount: number;
+}
+
+interface RawSeat {
+  id: string;
+  seat_number?: string;
+  seatNumber?: string;
+  is_available?: boolean;
+  isAvailable?: boolean;
+  is_reserved?: boolean;
+  isReserved?: boolean;
 }
 
 interface Seat {
@@ -19,11 +37,26 @@ interface Seat {
 }
 
 interface SeatSelectionProps {
-  bus: Bus;
+  bus: RawBus;
   onSeatsSelected: (seats: string[], totalPrice: number) => void;
 }
 
-export const SeatSelection: React.FC<SeatSelectionProps> = ({ bus, onSeatsSelected }) => {
+export const SeatSelection: React.FC<SeatSelectionProps> = ({ bus: rawBus, onSeatsSelected }) => {
+  // Map raw bus with explicit number coercion for prices and discount
+  const bus: Bus = useMemo(() => ({
+    id: rawBus.id,
+    plateNumber: rawBus.plate_number,
+    availableSeats: rawBus.available_seats,
+    pricePerSeat: Number(rawBus.price_per_seat) || 0,
+    studentDiscount: Number(rawBus.student_discount) || 0,
+  }), [rawBus]);
+
+  // Debug bus mapping
+  useEffect(() => {
+    console.log('[Bus Mapping] Raw Bus:', rawBus);
+    console.log('[Bus Mapping] Mapped Bus:', bus);
+  }, [rawBus, bus]);
+
   const [seats, setSeats] = useState<Seat[]>([]);
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
   const [passengerTypes, setPassengerTypes] = useState<{ [seatId: string]: 'adult' | 'student' }>({});
@@ -35,7 +68,7 @@ export const SeatSelection: React.FC<SeatSelectionProps> = ({ bus, onSeatsSelect
   useEffect(() => {
     if (bus.id) {
       loadSeats();
-      setSelectedSeats([]);  // Reset selection on bus change
+      setSelectedSeats([]);
       setPassengerTypes({});
     }
   }, [bus.id]);
@@ -46,11 +79,25 @@ export const SeatSelection: React.FC<SeatSelectionProps> = ({ bus, onSeatsSelect
     try {
       const response = await fetch(`${API_BASE_URL}/buses/${bus.id}/seats/`);
       if (!response.ok) throw new Error(`Failed to fetch seats: ${response.statusText}`);
-      const data: Seat[] = await response.json();
-      setSeats(data);
+      const data: RawSeat[] = await response.json();
+
+      // Map seats with fallback keys for possible snake_case or camelCase inconsistency
+      const mappedSeats: Seat[] = data.map(seat => ({
+        id: seat.id,
+        seatNumber: seat.seatNumber ?? seat.seat_number ?? 'Unknown',
+        isAvailable: seat.isAvailable ?? seat.is_available ?? false,
+        isReserved: seat.isReserved ?? seat.is_reserved ?? false,
+      }));
+
+      setSeats(mappedSeats);
+
+      // Debug seat data
+      console.log('[Seats Loaded] Raw Data:', data);
+      console.log('[Seats Loaded] Mapped Seats:', mappedSeats);
     } catch (err: any) {
       setError(err.message || 'Failed to load seats.');
       setSeats([]);
+      console.error('[Seats Load Error]', err);
     } finally {
       setIsLoading(false);
     }
@@ -58,18 +105,22 @@ export const SeatSelection: React.FC<SeatSelectionProps> = ({ bus, onSeatsSelect
 
   const handleSeatClick = (seatId: string) => {
     setSelectedSeats(prevSelected => {
-      let newSelection;
-      if (prevSelected.includes(seatId)) {
-        newSelection = prevSelected.filter(id => id !== seatId);
-        setPassengerTypes(prev => {
-          const { [seatId]: removed, ...rest } = prev;
-          return rest;
-        });
-      } else {
-        newSelection = [...prevSelected, seatId];
-        setPassengerTypes(prev => ({ ...prev, [seatId]: 'adult' }));
-      }
-      return newSelection;
+      const isSelected = prevSelected.includes(seatId);
+      const updatedSelection = isSelected
+        ? prevSelected.filter(id => id !== seatId)
+        : [...prevSelected, seatId];
+
+      setPassengerTypes(prev => {
+        const updated = { ...prev };
+        if (isSelected) {
+          delete updated[seatId];
+        } else {
+          updated[seatId] = 'adult';
+        }
+        return updated;
+      });
+
+      return updatedSelection;
     });
   };
 
@@ -77,17 +128,25 @@ export const SeatSelection: React.FC<SeatSelectionProps> = ({ bus, onSeatsSelect
     setPassengerTypes(prev => ({ ...prev, [seatId]: type }));
   };
 
+  // Calculate total price with debug output
   const totalPrice = useMemo(() => {
-    const basePrice = bus.pricePerSeat ?? 0;
-    const discount = bus.studentDiscount ?? 0;
+    const basePrice = bus.pricePerSeat;
+    const discount = bus.studentDiscount;
 
-    return selectedSeats.reduce((sum, seatId) => {
+    const total = selectedSeats.reduce((sum, seatId) => {
       const passengerType = passengerTypes[seatId] || 'adult';
       const price = passengerType === 'student'
         ? basePrice * (1 - discount / 100)
         : basePrice;
       return sum + price;
     }, 0);
+
+    console.log('[Price Calculation] SelectedSeats:', selectedSeats);
+    console.log('[Price Calculation] PassengerTypes:', passengerTypes);
+    console.log(`[Price Calculation] BasePrice: ${basePrice}, Discount: ${discount}%`);
+    console.log(`[Price Calculation] Total Price: ${total}`);
+
+    return total;
   }, [selectedSeats, passengerTypes, bus.pricePerSeat, bus.studentDiscount]);
 
   const handleConfirmSelection = () => {
@@ -110,27 +169,31 @@ export const SeatSelection: React.FC<SeatSelectionProps> = ({ bus, onSeatsSelect
     }
   };
 
-  // Break seats into rows of 4 (2 left + aisle + 2 right)
+  // Group seats into rows of 4 (2 left + aisle + 2 right)
   const seatRows: Seat[][] = [];
   for (let i = 0; i < seats.length; i += 4) {
     seatRows.push(seats.slice(i, i + 4));
   }
 
-  if (isLoading) return (
-    <Card>
-      <CardContent className="pt-6">
-        <div className="text-center py-8">Loading seats...</div>
-      </CardContent>
-    </Card>
-  );
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <div className="text-center py-8">Loading seats...</div>
+        </CardContent>
+      </Card>
+    );
+  }
 
-  if (error) return (
-    <Card>
-      <CardContent className="pt-6">
-        <div className="text-center py-8 text-red-600">{error}</div>
-      </CardContent>
-    </Card>
-  );
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <div className="text-center py-8 text-red-600">{error}</div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -144,22 +207,17 @@ export const SeatSelection: React.FC<SeatSelectionProps> = ({ bus, onSeatsSelect
         <CardContent>
           {/* Seat Legend */}
           <div className="flex flex-wrap gap-4 mb-6 text-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-gray-200 rounded" />
-              <span>Available</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-green-500 rounded" />
-              <span>Selected</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-yellow-500 rounded" />
-              <span>Reserved</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-red-500 rounded" />
-              <span>Occupied</span>
-            </div>
+            {[ 
+              { label: 'Available', color: 'bg-gray-200' },
+              { label: 'Selected', color: 'bg-green-500' },
+              { label: 'Reserved', color: 'bg-yellow-500' },
+              { label: 'Occupied', color: 'bg-red-500' },
+            ].map(({ label, color }) => (
+              <div key={label} className="flex items-center gap-2">
+                <div className={`w-4 h-4 ${color} rounded`} />
+                <span>{label}</span>
+              </div>
+            ))}
           </div>
 
           {/* Seat Layout */}
@@ -168,7 +226,6 @@ export const SeatSelection: React.FC<SeatSelectionProps> = ({ bus, onSeatsSelect
             <div className="space-y-3">
               {seatRows.map((row, rowIndex) => (
                 <div key={rowIndex} className="flex justify-center gap-2">
-                  {/* Left seats (0,1) */}
                   {row.slice(0, 2).map(seat => (
                     <button
                       key={seat.id}
@@ -181,10 +238,7 @@ export const SeatSelection: React.FC<SeatSelectionProps> = ({ bus, onSeatsSelect
                       {seat.seatNumber}
                     </button>
                   ))}
-
                   <div className="w-8" /> {/* aisle */}
-
-                  {/* Right seats (2,3) */}
                   {row.slice(2, 4).map(seat => (
                     <button
                       key={seat.id}
@@ -217,8 +271,8 @@ export const SeatSelection: React.FC<SeatSelectionProps> = ({ bus, onSeatsSelect
                 const seat = seats.find(s => s.id === seatId);
                 const passengerType = passengerTypes[seatId] || 'adult';
 
-                const basePrice = bus.pricePerSeat ?? 0;
-                const studentDiscount = bus.studentDiscount ?? 0;
+                const basePrice = bus.pricePerSeat;
+                const studentDiscount = bus.studentDiscount;
 
                 const price = passengerType === 'student'
                   ? basePrice * (1 - studentDiscount / 100)
@@ -249,6 +303,7 @@ export const SeatSelection: React.FC<SeatSelectionProps> = ({ bus, onSeatsSelect
                         </Button>
                       </div>
                     </div>
+
                     <div className="text-right">
                       <div className="font-medium">TSh {formattedPrice}</div>
                       {passengerType === 'student' && (
@@ -258,11 +313,14 @@ export const SeatSelection: React.FC<SeatSelectionProps> = ({ bus, onSeatsSelect
                   </div>
                 );
               })}
+
               <Separator />
+
               <div className="flex justify-between items-center">
                 <div className="font-medium">Total Amount:</div>
                 <div className="text-lg font-bold">TSh {totalPrice.toLocaleString()}</div>
               </div>
+
               <Button
                 onClick={handleConfirmSelection}
                 className="w-full"

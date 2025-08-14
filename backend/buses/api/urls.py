@@ -8,6 +8,13 @@ from .views import (
     SeatListByBusAPIView,
     BookingCreateAPIView,
     BookingReceiptView,
+    UserBookingsAPIView,
+    AdminStatsAPIView,
+    ConductorBusesAPIView,
+    ConductorBookingsAPIView,
+    UpdateBusLocationAPIView,
+    UpdateBookingStatusAPIView,
+
 )
 
 urlpatterns = [
@@ -25,6 +32,19 @@ urlpatterns = [
 
     # Bookings
     path('bookings/', BookingCreateAPIView.as_view(), name='booking-create'),
+    path('user/bookings/', UserBookingsAPIView.as_view(), name='user-bookings'),
 
-    path('bookings/<str:receipt_id>/receipt/', BookingReceiptView.as_view(), name='booking-receipt')
+
+    path('bookings/<str:receipt_id>/receipt/', BookingReceiptView.as_view(), name='booking-receipt'),
+    path('admin/stats/', AdminStatsAPIView.as_view(), name='admin-stats'),
+
+
+
+
+    path('conductor/buses/', ConductorBusesAPIView.as_view(), name='conductor-buses'),
+    path('conductor/bookings/', ConductorBookingsAPIView.as_view(), name='conductor-bookings'),
+    path('buses/<int:bus_id>/location/', UpdateBusLocationAPIView.as_view(), name='update-bus-location'),
+    path('bookings/<int:booking_id>/status/', UpdateBookingStatusAPIView.as_view(), name='update-booking-status'),
+
 ]
+

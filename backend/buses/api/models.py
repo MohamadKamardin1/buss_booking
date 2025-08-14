@@ -1,6 +1,6 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
-from django.utils import timezone
+from django.conf import settings
 
 
 class CustomUser(AbstractUser):
@@ -48,14 +48,27 @@ class Bus(models.Model):
 
     plate_number = models.CharField(max_length=20, unique=True)
     route = models.ForeignKey(Route, on_delete=models.CASCADE, related_name='buses')
+    conductor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='buses',
+        limit_choices_to={'role': 'conductor'},
+        help_text="User with role 'conductor' who operates this bus",
+        null=True,       # allow null temporarily
+        blank=True,
+        )
     capacity = models.PositiveIntegerField()
     price_per_seat = models.DecimalField(max_digits=10, decimal_places=2)
     student_discount = models.PositiveIntegerField(
-        default=0, help_text='Discount in percent for students'
+        default=0,
+        help_text='Discount in percent for students'
     )
     departure_time = models.TimeField()
     arrival_time = models.TimeField()
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='active')
+
+    latitude = models.FloatField(null=True, blank=True, help_text="Current latitude of the bus")
+    longitude = models.FloatField(null=True, blank=True, help_text="Current longitude of the bus")
 
     def __str__(self):
         return f"{self.plate_number} ({self.route.name})"
@@ -88,7 +101,7 @@ class Booking(models.Model):
         help_text='List of passenger info dicts with seatId, name, phone, email, passengerType'
     )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='confirmed')
-    booking_date = models.DateTimeField(auto_now_add=True)  # no default here; set at migration prompt
+    booking_date = models.DateTimeField(auto_now_add=True)
     receipt_id = models.CharField(max_length=50, unique=True)
 
     def __str__(self):

@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from django.db.models import Count
 from .models import CustomUser, Route, Station, Bus, Seat, Booking
+import uuid
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -54,6 +55,7 @@ class BusSerializer(serializers.ModelSerializer):
             'id',
             'plate_number',
             'route',
+            'conductor',           # Newly added conductor field
             'capacity',
             'available_seats',
             'price_per_seat',
@@ -61,15 +63,21 @@ class BusSerializer(serializers.ModelSerializer):
             'departure_time',
             'arrival_time',
             'status',
+            'latitude',            # Newly added latitude
+            'longitude',           # Newly added longitude
         ]
 
     def get_available_seats(self, obj):
+        """
+        Calculate available seats for the given bus on a specific travel date.
+        Expects 'travel_date' in serializer context.
+        """
         travel_date = self.context.get('travel_date')
         if not travel_date:
             # No date provided, assume full capacity available
             return obj.capacity
 
-        # Count the total number of seats booked for this bus and date where booking is confirmed
+        # Count the total number of seats booked for this bus & date where booking is confirmed
         booked_seats = obj.bookings.filter(travel_date=travel_date, status='confirmed').aggregate(
             total=Count('seats')
         )['total'] or 0
@@ -81,12 +89,14 @@ class SeatSerializer(serializers.ModelSerializer):
     seatNumber = serializers.CharField(source='seat_number')
     isAvailable = serializers.BooleanField(source='is_available')
     isReserved = serializers.BooleanField(source='is_reserved')
+    price = serializers.SerializerMethodField()
 
     class Meta:
         model = Seat
-        fields = ['id', 'bus', 'seatNumber', 'isAvailable', 'isReserved']   
+        fields = ['id', 'bus', 'seatNumber', 'isAvailable', 'isReserved', 'price']
 
-import uuid
+    def get_price(self, seat):
+        return seat.bus.price_per_seat
 
 
 class BookingSerializer(serializers.ModelSerializer):
@@ -108,28 +118,50 @@ class BookingSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'status', 'booking_date', 'receipt_id', 'user']
 
+    def generate_unique_receipt_id(self):
+        """
+        Generate a unique receipt_id to avoid DB uniqueness conflicts.
+        """
+        while True:
+            receipt_id = f"RCP-{uuid.uuid4().hex[:16].upper()}"
+            if not Booking.objects.filter(receipt_id=receipt_id).exists():
+                return receipt_id
+
     def create(self, validated_data):
         seats = validated_data.pop('seats')
         passenger_info = validated_data.pop('passenger_info', [])
+
         user = self.context['request'].user
         validated_data['user'] = user
 
-        # Add receipt ID
-        validated_data['receipt_id'] = f"RCP-{uuid.uuid4().hex[:10].upper()}"
+        # Generate a unique receipt_id safely
+        validated_data['receipt_id'] = self.generate_unique_receipt_id()
 
-        # Combine passenger info with seat numbers
+        bus = validated_data['bus']
+        base_price = bus.price_per_seat
+        discount = bus.student_discount
+
+        total_price = 0
+        for i, seat in enumerate(seats):
+            passenger = passenger_info[i] if i < len(passenger_info) else {}
+            passenger_type = passenger.get('type', 'adult')
+            # Apply discount only for students
+            price = base_price * (1 - discount / 100) if passenger_type == 'student' else base_price
+            total_price += price
+
+        validated_data['total_price'] = total_price
+
+        # Combine passenger info with seat data
         combined_passenger_info = []
         for i, passenger in enumerate(passenger_info):
-            # Defensive: passenger_info length should correspond to seats length
             seat = seats[i] if i < len(seats) else None
             if seat:
                 combined = passenger.copy()
                 combined['seatId'] = seat.id
-                combined['seatNumber'] = seat.seat_number  # Add human-readable seat number
+                combined['seatNumber'] = seat.seat_number
                 combined_passenger_info.append(combined)
             else:
-                combined_passenger_info.append(passenger)  
-                # Or raise error if mismatch is critical
+                combined_passenger_info.append(passenger)
 
         validated_data['passenger_info'] = combined_passenger_info
 
@@ -149,6 +181,7 @@ class BookingSerializer(serializers.ModelSerializer):
                     f"Seat {seat.seat_number} does not belong to bus {bus.plate_number}"
                 )
 
+            # Check seat availability for the travel date with confirmed status
             if Booking.objects.filter(
                 bus=bus, travel_date=travel_date, seats=seat, status='confirmed'
             ).exists():

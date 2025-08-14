@@ -25,13 +25,14 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
       const response = await fetch('http://127.0.0.1:8000/api/login/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username: username.trim(), password }),
       });
 
       if (response.ok) {
         const data = await response.json();
 
         if (data.access && data.role && data.username) {
+          // Save tokens and user info in localStorage (or your auth context)
           localStorage.setItem('token', data.access);
           localStorage.setItem('refreshToken', data.refresh);
           localStorage.setItem('username', data.username);
@@ -39,19 +40,21 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
 
           toast.success('Login successful!');
 
-          // Redirect user based on role
+          window.location.reload();
+          // Redirect user based on role with replace to avoid back navigation to login
           switch (data.role) {
             case 'conductor':
-              navigate('/conductor');
+              navigate('/conductor', { replace: true });
               break;
             case 'passenger':
-              navigate('/passenger');
+              navigate('/passenger', { replace: true });
               break;
             case 'admin':
-              navigate('/admin');
+              navigate('/admin', { replace: true });
               break;
             default:
-              navigate('/'); // fallback or home page
+              navigate('/', { replace: true }); // fallback or home page
+              break;
           }
         } else {
           toast.error('Login failed: Invalid response from server.');
@@ -84,6 +87,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
+              autoComplete="username"
             />
           </div>
           <div className="space-y-2">
@@ -95,6 +99,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              autoComplete="current-password"
             />
           </div>
           <Button type="submit" className="w-full" disabled={isLoading}>

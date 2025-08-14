@@ -1,79 +1,83 @@
 import React, { useState } from 'react';
 import { LoginForm } from './LoginForm';
 import { RegisterForm } from './RegisterForm';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { Info, User, Shield, Settings } from 'lucide-react';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardDescription,
+  CardTitle,
+} from '../ui/card';
+import { Info, Link, MapPin, Users } from 'lucide-react';
 
 export const AuthPage: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
 
-  const toggleMode = () => {
-    setIsLogin(!isLogin);
-  };
+  const toggleMode = () => setIsLogin(!isLogin);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-4xl grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Demo Credentials Card */}
-        <Card className="order-2 lg:order-1">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-6">
+      <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Welcome & Info Section */}
+        <Card className="order-2 lg:order-1 shadow-lg">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Info className="h-5 w-5" />
-              Demo Credentials
+            <CardTitle className="flex items-center gap-3 text-primary">
+              <Users className="h-6 w-6" />
+              Welcome to the Zanzibar Bus Booking System
             </CardTitle>
-            <CardDescription>
-              Use these test accounts to explore different user roles
+            <CardDescription className="mt-1">
+              Simplify your travel with easy bus ticket bookings, track your trips, and manage your journeys all in one place.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              <div className="p-3 bg-blue-50 rounded-lg">
-                <div className="flex items-center gap-2 mb-2">
-                  <User className="h-4 w-4 text-blue-600" />
-                  <span className="font-medium text-blue-800">Regular User</span>
-                </div>
-                <div className="text-sm text-blue-700">
-                  <div>Email: user@example.com</div>
-                  <div>Password: any password</div>
-                  <div className="text-xs mt-1">Book tickets, view bookings</div>
-                </div>
-              </div>
 
-              <div className="p-3 bg-green-50 rounded-lg">
-                <div className="flex items-center gap-2 mb-2">
-                  <Shield className="h-4 w-4 text-green-600" />
-                  <span className="font-medium text-green-800">Conductor</span>
-                </div>
-                <div className="text-sm text-green-700">
-                  <div>Email: conductor@example.com</div>
-                  <div>Password: any password</div>
-                  <div className="text-xs mt-1">Manage bookings, update bus location</div>
-                </div>
-              </div>
+          <CardContent className="space-y-6">
+            <section>
+              <h3 className="flex items-center gap-2 text-lg font-semibold text-secondary">
+                <Info className="h-5 w-5" /> How It Works
+              </h3>
+              <p className="text-gray-700">
+                Book bus tickets quickly and securely. Choose your route, select seats, manage your bookings, and stay updated on trips.
+              </p>
+            </section>
 
-              <div className="p-3 bg-purple-50 rounded-lg">
-                <div className="flex items-center gap-2 mb-2">
-                  <Settings className="h-4 w-4 text-purple-600" />
-                  <span className="font-medium text-purple-800">Administrator</span>
-                </div>
-                <div className="text-sm text-purple-700">
-                  <div>Email: admin@example.com</div>
-                  <div>Password: any password</div>
-                  <div className="text-xs mt-1">Full system management</div>
-                </div>
-              </div>
-            </div>
+            <section>
+              <h3 className="flex items-center gap-2 text-lg font-semibold text-secondary">
+                <MapPin className="h-5 w-5" /> Key Features
+              </h3>
+              <ul className="list-disc list-inside space-y-1 text-gray-700">
+                <li>Real-time bus location tracking by conductors</li>
+                <li>Easy booking management from your dashboard</li>
+                <li>Secure authentication for users, conductors, and admins</li>
+                <li>Instant booking confirmation and printable receipts</li>
+              </ul>
+            </section>
 
-            <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
-              <div className="text-sm text-yellow-800">
-                <strong>Note:</strong> This is a frontend demo with mock data. 
-                The system is ready for Django backend integration.
-              </div>
-            </div>
+            <section>
+              <h3 className="flex items-center gap-2 text-lg font-semibold text-secondary">
+                <Link className="h-5 w-5" /> Helpful Links
+              </h3>
+              <ul className="space-y-1 text-blue-700 underline cursor-pointer">
+                <li>
+                  <a href="/help" target="_blank" rel="noopener noreferrer">
+                    How to Book Tickets
+                  </a>
+                </li>
+                <li>
+                  <a href="/faq" target="_blank" rel="noopener noreferrer">
+                    Frequently Asked Questions
+                  </a>
+                </li>
+                <li>
+                  <a href="/contact" target="_blank" rel="noopener noreferrer">
+                    Contact Support
+                  </a>
+                </li>
+              </ul>
+            </section>
           </CardContent>
         </Card>
 
-        {/* Login/Register Form */}
+        {/* Login/Register Form Section */}
         <div className="order-1 lg:order-2">
           {isLogin ? (
             <LoginForm onToggleMode={toggleMode} />
